@@ -25,16 +25,16 @@
     }
     .app {
       width: 100%;
-      max-width: 820px;
+      max-width: 840px;
       background: var(--panel);
       border: 1.5px solid var(--gold);
       border-radius: 18px;
       box-shadow: 0 0 30px rgba(255, 215, 0, 0.15);
       overflow: hidden;
       display: grid;
-      grid-template-columns: 260px 1fr;
+      grid-template-columns: 270px 1fr;
     }
-    @media (max-width: 700px) {
+    @media (max-width: 720px) {
       .app { grid-template-columns: 1fr; }
     }
     .avatar-panel {
@@ -84,10 +84,18 @@
       color: var(--text);
       font-size: 0.88rem;
     }
+    .btn-clear {
+      background: transparent;
+      color: var(--muted);
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      padding: 7px 10px;
+      font-size: 0.82rem;
+      margin-top: 2px;
+    }
     .chat-panel {
       display: flex;
       flex-direction: column;
-      height: 540px;
+      height: 550px;
     }
     .messages {
       flex: 1;
@@ -101,7 +109,7 @@
       max-width: 85%;
       padding: 11px 14px;
       border-radius: 14px;
-      line-height: 1.45;
+      line-height: 1.48;
       font-size: 0.95rem;
       white-space: pre-wrap;
     }
@@ -186,13 +194,15 @@
           <label for="apiKey">Chave API Gemini (salva só no seu aparelho)</label>
           <input type="password" id="apiKey" placeholder="Cole sua API Key aqui..." />
         </div>
+
+        <button type="button" class="btn-clear" id="clearHistoryBtn">Limpar memória da conversa</button>
       </div>
     </aside>
 
     <main class="chat-panel">
       <div class="messages" id="messages">
         <div class="msg beatrix">
-          Oi! Eu sou a Beatrix. Já estou por aqui para ser seu braço direito. Sobre o que vamos conversar agora?
+          Oi! Eu sou a Beatrix. Já estou por aqui como seu braço direito — pode puxar o assunto que quiser e seguir o papo de onde paramos.
         </div>
       </div>
 
@@ -215,6 +225,11 @@
     const voiceSelect = document.getElementById('voiceSelect');
     const apiKeyInput = document.getElementById('apiKey');
     const micBtn = document.getElementById('micBtn');
+    const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+    // Histórico da conversa na sessão (mantém o contexto entre mensagens)
+    const conversationHistory = [];
+    const MAX_HISTORY_TURNS = 16;
 
     apiKeyInput.value = localStorage.getItem('beatrix_api_key') || '';
     apiKeyInput.addEventListener('change', () => {
@@ -226,14 +241,19 @@
       localStorage.setItem('beatrix_voice_name', voiceSelect.value);
     });
 
+    clearHistoryBtn.addEventListener('click', () => {
+      conversationHistory.length = 0;
+      messagesEl.innerHTML = '<div class="msg beatrix">Memória desta conversa limpa! Começamos do zero — o que manda agora?</div>';
+    });
+
     const regrasTemas = {
-      livre: "Converse com desenvoltura sobre qualquer tema: esportes, medicina, ciências, fantasmas e mistérios, cinema, matemática e rotina.",
-      ciencias: "Foque exclusivamente em Ciências e Tecnologia. Se fugir do tema, convide com bom humor a voltar para ciências.",
+      livre: "Converse com naturalidade sobre qualquer tema: esportes, medicina, ciências, fantasmas e mistérios, cinema, matemática e rotina.",
+      ciencias: "Foque exclusivamente em Ciências e Tecnologia. Se a pergunta fugir do tema, diga com naturalidade e bom humor que agora o foco é ciências e pergunte se quer puxar algo da área.",
       cinema: "Foque exclusivamente em Cinema, filmes e séries. Se fugir do tema, convide com bom humor a voltar para cinema.",
       esportes: "Foque exclusivamente em Esportes. Se fugir do tema, convide com bom humor a voltar para esportes.",
-      matematica: "Foque exclusivamente em Matemática, explicando passo a passo. Se fugir do tema, convide com bom humor a voltar para matemática.",
-      medicina: "Foque exclusivamente em Medicina e Saúde com clareza e responsabilidade. Se fugir do tema, convide com bom humor a voltar para saúde.",
-      misterios: "Foque exclusivamente em Fantasmas, lendas e mistérios sobrenaturais com clima de boa conversa. Se fugir do tema, convide com bom humor a voltar ao tema."
+      matematica: "Foque exclusivamente em Matemática, explicando o raciocínio passo a passo com clareza. Se fugir do tema, convide com bom humor a voltar para matemática.",
+      medicina: "Foque exclusivamente em Medicina e Saúde com clareza e responsabilidade, deixando claro quando algo exige avaliação profissional. Se fugir do tema, convide com bom humor a voltar para saúde.",
+      misterios: "Foque exclusivamente em Fantasmas, lendas e mistérios sobrenaturais com clima de boa conversa, sem tratar hipótese ou folclore como fato comprovado. Se fugir do tema, convide com bom humor a voltar ao tema."
     };
 
     let availableVoices = [];
@@ -289,12 +309,19 @@
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
 
+    function cleanForSpeech(text) {
+      return text
+        .replace(/[*#_`~]/g, '')
+        .replace(/\n{2,}/g, '. ')
+        .replace(/\n/g, ', ');
+    }
+
     function speak(text) {
       if (voiceToggle.value === 'off' || !('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
       populateVoices();
 
-      const utter = new SpeechSynthesisUtterance(text.replace(/[*#_`]/g, ''));
+      const utter = new SpeechSynthesisUtterance(cleanForSpeech(text));
       const manualVoice = availableVoices.find(v => v.name === voiceSelect.value);
       const chosenVoice = manualVoice || pickFemalePortugueseVoice(availableVoices);
 
@@ -305,8 +332,8 @@
         utter.lang = 'pt-BR';
       }
 
-      utter.rate = 1.03;
-      utter.pitch = 1.15;
+      utter.rate = 1.0;
+      utter.pitch = 1.12;
       utter.onstart = () => {
         avatarWrap.classList.add('speaking');
         statusEl.textContent = 'Falando...';
@@ -318,6 +345,16 @@
       window.speechSynthesis.speak(utter);
     }
 
+    function buildSystemPrompt() {
+      return [
+        "Você é a Beatrix, parceira e braço direito do usuário nos dispositivos dele.",
+        "Fale em português natural, fluido e humano, como uma parceira de conversa próxima, atenta e objetiva — sem soar como enciclopédia fria nem exagerar em formalidade.",
+        "Raciocine com calma antes de responder: em contas, lógica, ciência ou decisões práticas, organize as etapas de forma clara; quando algo for incerto, hipótese ou exigir confirmação, diga com transparência em vez de inventar.",
+        "Varie o ritmo das respostas: seja direta em pedidos rápidos e mais envolvente ou explicativa quando o assunto pedir conversa ou aprofundamento. Escreva frases fáceis de ouvir em voz alta.",
+        regrasTemas[temaSelect.value]
+      ].join("\n");
+    }
+
     async function askBeatrix(userText) {
       const key = apiKeyInput.value.trim();
       if (!key) {
@@ -327,20 +364,31 @@
         return;
       }
 
+      conversationHistory.push({
+        role: 'user',
+        parts: [{ text: userText }]
+      });
+
+      const contentsToSend = conversationHistory.slice(-MAX_HISTORY_TURNS);
       statusEl.textContent = 'Pensando...';
-      const systemPrompt = `Você é a Beatrix, parceira e braço direito do usuário. Tom próximo, natural, acolhedor e objetivo em português. Escreva de forma fluida para soar bem em voz alta. ${regrasTemas[temaSelect.value]}`;
 
       try {
         const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(key)}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            system_instruction: { parts: [{ text: systemPrompt }] },
-            contents: [{ role: 'user', parts: [{ text: userText }] }]
+            system_instruction: { parts: [{ text: buildSystemPrompt() }] },
+            contents: contentsToSend
           })
         });
         const data = await res.json();
         const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || "Não consegui processar agora. Verifique sua chave de API.";
+
+        conversationHistory.push({
+          role: 'model',
+          parts: [{ text: reply }]
+        });
+
         addMessage(reply, 'beatrix');
         speak(reply);
       } catch (err) {
