@@ -87,7 +87,7 @@
     .chat-panel {
       display: flex;
       flex-direction: column;
-      height: 520px;
+      height: 540px;
     }
     .messages {
       flex: 1;
@@ -103,6 +103,7 @@
       border-radius: 14px;
       line-height: 1.45;
       font-size: 0.95rem;
+      white-space: pre-wrap;
     }
     .msg.beatrix {
       background: rgba(56, 189, 248, 0.12);
@@ -147,7 +148,7 @@
   <div class="app">
     <aside class="avatar-panel">
       <div class="avatar-wrap" id="avatarWrap">
-        <img src="beatrix.png" alt="Beatrix" onerror="this.src='https://via.placeholder.com/200/0f1422/ffd700?text=BEATRIX'" />
+        <img src="Beatrix.png" alt="Beatrix" onerror="this.src='beatrix.png'" />
       </div>
       <div class="name">BEATRIX</div>
       <div class="status" id="statusText">Online • Pronta para ajudar</div>
@@ -171,6 +172,13 @@
           <select id="voiceToggle">
             <option value="on">Ativada (Falar respostas)</option>
             <option value="off">Silenciosa (Só texto)</option>
+          </select>
+        </div>
+
+        <div>
+          <label for="voiceSelect">Selecionar Voz</label>
+          <select id="voiceSelect">
+            <option value="">Automática (Feminina PT-BR)</option>
           </select>
         </div>
 
@@ -204,13 +212,18 @@
     const avatarWrap = document.getElementById('avatarWrap');
     const temaSelect = document.getElementById('temaSelect');
     const voiceToggle = document.getElementById('voiceToggle');
+    const voiceSelect = document.getElementById('voiceSelect');
     const apiKeyInput = document.getElementById('apiKey');
     const micBtn = document.getElementById('micBtn');
 
-    // Salva a chave apenas localmente no navegador do seu dispositivo (nunca vai para o GitHub)
     apiKeyInput.value = localStorage.getItem('beatrix_api_key') || '';
     apiKeyInput.addEventListener('change', () => {
       localStorage.setItem('beatrix_api_key', apiKeyInput.value.trim());
+    });
+
+    const savedVoiceName = localStorage.getItem('beatrix_voice_name') || '';
+    voiceSelect.addEventListener('change', () => {
+      localStorage.setItem('beatrix_voice_name', voiceSelect.value);
     });
 
     const regrasTemas = {
@@ -223,6 +236,51 @@
       misterios: "Foque exclusivamente em Fantasmas, lendas e mistérios sobrenaturais com clima de boa conversa. Se fugir do tema, convide com bom humor a voltar ao tema."
     };
 
+    let availableVoices = [];
+
+    function pickFemalePortugueseVoice(voices) {
+      const ptVoices = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
+      const femaleKeywords = ['maria', 'luciana', 'francisca', 'camila', 'vitoria', 'vitória', 'helena', 'leticia', 'letícia', 'fernanda', 'google português do brasil', 'female', 'feminina'];
+
+      const matched = ptVoices.find(v => {
+        const nameLower = v.name.toLowerCase();
+        return femaleKeywords.some(k => nameLower.includes(k));
+      });
+
+      return matched || ptVoices[0] || voices[0] || null;
+    }
+
+    function populateVoices() {
+      if (!('speechSynthesis' in window)) return;
+      availableVoices = window.speechSynthesis.getVoices();
+      if (!availableVoices.length) return;
+
+      const currentVal = voiceSelect.value || savedVoiceName;
+      voiceSelect.innerHTML = '<option value="">Automática (Feminina PT-BR)</option>';
+
+      const sorted = [...availableVoices].sort((a, b) => {
+        const aPt = a.lang && a.lang.toLowerCase().startsWith('pt') ? -1 : 1;
+        const bPt = b.lang && b.lang.toLowerCase().startsWith('pt') ? -1 : 1;
+        return aPt - bPt || a.name.localeCompare(b.name);
+      });
+
+      for (const v of sorted) {
+        const opt = document.createElement('option');
+        opt.value = v.name;
+        opt.textContent = `${v.name} (${v.lang})`;
+        voiceSelect.appendChild(opt);
+      }
+
+      if (currentVal && sorted.some(v => v.name === currentVal)) {
+        voiceSelect.value = currentVal;
+      }
+    }
+
+    if ('speechSynthesis' in window) {
+      populateVoices();
+      window.speechSynthesis.onvoiceschanged = populateVoices;
+    }
+
     function addMessage(text, sender) {
       const div = document.createElement('div');
       div.className = `msg ${sender}`;
@@ -234,10 +292,21 @@
     function speak(text) {
       if (voiceToggle.value === 'off' || !('speechSynthesis' in window)) return;
       window.speechSynthesis.cancel();
+      populateVoices();
+
       const utter = new SpeechSynthesisUtterance(text.replace(/[*#_`]/g, ''));
-      utter.lang = 'pt-BR';
+      const manualVoice = availableVoices.find(v => v.name === voiceSelect.value);
+      const chosenVoice = manualVoice || pickFemalePortugueseVoice(availableVoices);
+
+      if (chosenVoice) {
+        utter.voice = chosenVoice;
+        utter.lang = chosenVoice.lang;
+      } else {
+        utter.lang = 'pt-BR';
+      }
+
       utter.rate = 1.03;
-      utter.pitch = 1.08;
+      utter.pitch = 1.15;
       utter.onstart = () => {
         avatarWrap.classList.add('speaking');
         statusEl.textContent = 'Falando...';
@@ -290,7 +359,6 @@
       askBeatrix(text);
     });
 
-    // Reconhecimento de voz (Microfone)
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
